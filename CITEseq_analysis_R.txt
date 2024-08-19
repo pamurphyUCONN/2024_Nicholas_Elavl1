@@ -1,0 +1,357 @@
+### ELAVL CITE-seq data analysis R script
+
+
+### load packages
+library(Seurat)
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+library(RColorBrewer)
+library(data.table)
+library(scater)
+library(edgeR)
+library(hdf5r)
+set.seed(123)
+library(scDblFinder)
+
+### Read raw feature bc matrix h5 files
+CITE1 <- Read10X_h5("~/Desktop/Elavl1CITE1_raw_feature_bc_matrix.h5", use.names = TRUE, unique.features = TRUE)
+
+### Create a seurat object
+seu_CITE1 <- CreateSeuratObject(counts = CITE1[["Gene Expression"]],min.cells = 3, min.features = 200, project = "Elavl1")
+
+### Look at rownames of hashtags and feature antibody capture (CITE-seq)
+rownames(CITE1$`Antibody Capture`)
+
+### Define hashtags
+CITE1$`Antibody Capture HTO` <- CITE1$`Antibody Capture`[79:88,]
+
+### Define feature antibody capture list
+CITE1$`Antibody Capture NEAT` <- CITE1$`Antibody Capture`
+
+### Create assay for hashtags
+seu_CITE1[["HTO"]] <- CreateAssayObject(CITE1[["Antibody Capture HTO"]][, colnames(x = seu_CITE1)])
+
+### Create assay for antibody capture list
+seu_CITE1[["NEAT"]] <- CreateAssayObject(CITE1[["Antibody Capture NEAT"]][, colnames(x = seu_CITE1)])
+
+### Normalize hashtag counts and demultiplex
+seu_CITE1 <- NormalizeData(seu_CITE1, assay = "HTO", normalization.method = "CLR", margin=2)
+seu_CITE1 <- MULTIseqDemux(seu_CITE1, assay = "HTO", autoThresh = T)
+
+### Remove cells with negative or multiple hashtags
+seu_CITE1 <- subset(seu_CITE1, subset=MULTI_ID %in% c("Negative","Doublet"), invert = TRUE)
+dim(seu_CITE1)
+table(seu_CITE1$MULTI_ID)
+
+### Remove doublets using scDblFinder
+seu_CITE1 <- as.SingleCellExperiment(seu_CITE1)
+seu_CITE1 <- scDblFinder(seu_CITE1)
+table(seu_CITE1$scDblFinder.class)
+seu_CITE1 <- as.Seurat(seu_CITE1, data = NULL)
+seu_CITE1 <- subset(seu_CITE1, subset= scDblFinder.class%in% c("singlet"))
+DefaultAssay(seu_CITE1) <- "RNA"
+dim(seu_CITE1)
+
+### Add labels for condition, sex, and genotype
+seu_CITE1$condition <- 'Plaque'
+seu_CITE1$sex <- 'Female'
+seu_CITE1$genotype <- ifelse(seu_CITE1$MULTI_ID %in% c("Hashtag1","Hashtag5","Hashtag6", "Hashtag9"), 'ElavlKO', 'ElavlWT')
+
+### Create new identifier with more descriptive info
+seu_CITE1$MULTI_ID2 <- paste0(seu_CITE1$MULTI_ID, "_Plaque_Female")
+
+### Determine percentage of mitochondrial genes and subset data
+seu_CITE1[["percent.mt"]] <- PercentageFeatureSet(seu_CITE1, pattern = "^mt-")
+plot1 <- FeatureScatter(seu_CITE1,feature1="nCount_RNA",feature2="percent.mt")
+plot2 <- FeatureScatter(seu_CITE1,feature1="nCount_RNA",feature2="nFeature_RNA")
+plot1 + plot2
+seu_CITE1 <- subset(seu_CITE1, subset = nFeature_RNA > 300 & nFeature_RNA < 5000 & nCount_RNA < 20000 & percent.mt <10)
+
+### Read raw feature bc matrix h5 files
+CITE2 <- Read10X_h5("~/Desktop/Elavl1CITE2_raw_feature_bc_matrix.h5", use.names = TRUE, unique.features = TRUE)
+
+### Create a seurat object
+seu_CITE2 <- CreateSeuratObject(counts = CITE2[["Gene Expression"]],min.cells = 3, min.features = 200, project = "Elavl1")
+
+
+### Look at rownames of hashtags and feature antibody capture (CITE-seq)
+rownames(CITE2$`Antibody Capture`)
+
+### Define hashtags
+CITE2$`Antibody Capture HTO` <- CITE2$`Antibody Capture`[79:88,]
+
+### Define feature antibody capture list
+CITE2$`Antibody Capture NEAT` <- CITE2$`Antibody Capture`
+
+### Create assay for hashtags
+seu_CITE2[["HTO"]] <- CreateAssayObject(CITE2[["Antibody Capture HTO"]][, colnames(x = seu_CITE2)])
+
+### Create assay for antibody capture list
+seu_CITE2[["NEAT"]] <- CreateAssayObject(CITE2[["Antibody Capture NEAT"]][, colnames(x = seu_CITE2)])
+
+### Normalize hashtag counts and demultiplex
+seu_CITE2 <- NormalizeData(seu_CITE2, assay = "HTO", normalization.method = "CLR", margin=2)
+seu_CITE2 <- MULTIseqDemux(seu_CITE2, assay = "HTO", autoThresh = T)
+
+### Remove cells with negative or multiple hashtags
+seu_CITE2 <- subset(seu_CITE2, subset=MULTI_ID %in% c("Negative","Doublet"), invert = TRUE)
+dim(seu_CITE2)
+table(seu_CITE2$MULTI_ID)
+
+### Remove doublets using scDblFinder
+seu_CITE2 <- as.SingleCellExperiment(seu_CITE2)
+seu_CITE2 <- scDblFinder(seu_CITE2)
+table(seu_CITE2$scDblFinder.class)
+seu_CITE2 <- as.Seurat(seu_CITE2, data = NULL)
+seu_CITE2 <- subset(seu_CITE2, subset= scDblFinder.class%in% c("singlet"))
+DefaultAssay(seu_CITE2) <- "RNA"
+dim(seu_CITE2)
+
+### Add labels for condition, sex, and genotype
+seu_CITE2$condition <- 'Blood'
+seu_CITE2$sex <- 'Female'
+seu_CITE2$genotype <- ifelse(seu_CITE2$MULTI_ID %in% c("Hashtag1","Hashtag5","Hashtag6", "Hashtag9"), 'ElavlKO', 'ElavlWT')
+
+### Create new identifier with more descriptive info
+seu_CITE2$MULTI_ID2 <- paste0(seu_CITE2$MULTI_ID, "_Blood_Female")
+
+### Determine percentage of mitochondrial genes and subset data
+seu_CITE2[["percent.mt"]] <- PercentageFeatureSet(seu_CITE2, pattern = "^mt-")
+plot1 <- FeatureScatter(seu_CITE2,feature1="nCount_RNA",feature2="percent.mt")
+plot2 <- FeatureScatter(seu_CITE2,feature1="nCount_RNA",feature2="nFeature_RNA")
+plot1 + plot2
+seu_CITE2 <- subset(seu_CITE2, subset = nFeature_RNA > 300 & nFeature_RNA < 5000 & nCount_RNA < 20000 & percent.mt <10)
+dim(seu_CITE2)
+
+### Read raw feature bc matrix h5 files
+CITE3 <- Read10X_h5("~/Desktop/Elavl1CITE3_raw_feature_bc_matrix.h5", use.names = TRUE, unique.features = TRUE)
+
+### Create a seurat object
+seu_CITE3 <- CreateSeuratObject(counts = CITE3[["Gene Expression"]],min.cells = 3, min.features = 200, project = "Elavl1")
+
+### Look at rownames of hashtags and feature antibody capture (CITE-seq)
+rownames(CITE3$`Antibody Capture`)
+
+### Define hashtags
+CITE3$`Antibody Capture HTO` <- CITE3$`Antibody Capture`[79:88,]
+
+### Define feature antibody capture list
+CITE3$`Antibody Capture NEAT` <- CITE3$`Antibody Capture`
+
+### Create assay for hashtags
+seu_CITE3[["HTO"]] <- CreateAssayObject(CITE3[["Antibody Capture HTO"]][, colnames(x = seu_CITE3)])
+
+### Create assay for antibody capture list
+seu_CITE3[["NEAT"]] <- CreateAssayObject(CITE3[["Antibody Capture NEAT"]][, colnames(x = seu_CITE3)])
+
+### Normalize hashtag counts and demultiplex
+seu_CITE3 <- NormalizeData(seu_CITE3, assay = "HTO", normalization.method = "CLR", margin=2)
+seu_CITE3 <- MULTIseqDemux(seu_CITE3, assay = "HTO", autoThresh = T)
+
+### Remove cells with negative or multiple hashtags
+seu_CITE3 <- subset(seu_CITE3, subset=MULTI_ID %in% c("Negative","Doublet"), invert = TRUE)
+dim(seu_CITE3)
+table(seu_CITE3$MULTI_ID)
+
+### Remove doublets using scDblFinder
+seu_CITE3 <- as.SingleCellExperiment(seu_CITE3)
+seu_CITE3 <- scDblFinder(seu_CITE3)
+table(seu_CITE3$scDblFinder.class)
+seu_CITE3 <- as.Seurat(seu_CITE3, data = NULL)
+seu_CITE3 <- subset(seu_CITE3, subset= scDblFinder.class%in% c("singlet"))
+DefaultAssay(seu_CITE3) <- "RNA"
+dim(seu_CITE3)
+
+### Add labels for condition, sex, and genotype
+seu_CITE3$condition <- 'Plaque'
+seu_CITE3$sex <- 'Male'
+seu_CITE3$genotype <- ifelse(seu_CITE3$MULTI_ID %in% c("Hashtag5","Hashtag6", "Hashtag7"), 'ElavlKO', 'ElavlWT')
+
+### Create new identifier with more descriptive info
+seu_CITE3$MULTI_ID2 <- paste0(seu_CITE3$MULTI_ID, "_Plaque_Male")
+
+### Determine percentage of mitochondrial genes and subset data
+seu_CITE3[["percent.mt"]] <- PercentageFeatureSet(seu_CITE3, pattern = "^mt-")
+plot1 <- FeatureScatter(seu_CITE3,feature1="nCount_RNA",feature2="percent.mt")
+plot2 <- FeatureScatter(seu_CITE3,feature1="nCount_RNA",feature2="nFeature_RNA")
+plot1 + plot2
+seu_CITE3 <- subset(seu_CITE3, subset = nFeature_RNA > 300 & nFeature_RNA < 5000 & nCount_RNA < 20000 & percent.mt <10)
+dim(seu_CITE3)
+
+### Read raw feature bc matrix h5 files
+CITE4 <- Read10X_h5("~/Desktop/Elavl1CITE4_raw_feature_bc_matrix.h5", use.names = TRUE, unique.features = TRUE)
+
+### Create a seurat object
+seu_CITE4 <- CreateSeuratObject(counts = CITE4[["Gene Expression"]],min.cells = 3, min.features = 200, project = "Elavl1")
+
+### Look at rownames of hashtags and feature antibody capture (CITE-seq)
+rownames(CITE4$`Antibody Capture`)
+
+### Define hashtags
+CITE4$`Antibody Capture HTO` <- CITE4$`Antibody Capture`[79:88,]
+
+### Define feature antibody capture list
+CITE4$`Antibody Capture NEAT` <- CITE4$`Antibody Capture`
+
+### Create assay for hashtags
+seu_CITE4[["HTO"]] <- CreateAssayObject(CITE4[["Antibody Capture HTO"]][, colnames(x = seu_CITE4)])
+
+### Create assay for antibody capture list
+seu_CITE4[["NEAT"]] <- CreateAssayObject(CITE4[["Antibody Capture NEAT"]][, colnames(x = seu_CITE4)])
+
+### Normalize hashtag counts and demultiplex
+seu_CITE4 <- NormalizeData(seu_CITE4, assay = "HTO", normalization.method = "CLR", margin=2)
+seu_CITE4 <- MULTIseqDemux(seu_CITE4, assay = "HTO", autoThresh = T)
+table(seu_CITE4$MULTI_ID)
+
+### Remove cells with negative or multiple hashtags
+seu_CITE4 <- subset(seu_CITE4, subset=MULTI_ID %in% c("Negative","Doublet"), invert = TRUE)
+dim(seu_CITE4)
+table(seu_CITE4$MULTI_ID)
+
+### Remove doublets using scDblFinder
+seu_CITE4 <- as.SingleCellExperiment(seu_CITE4)
+seu_CITE4 <- scDblFinder(seu_CITE4)
+table(seu_CITE4$scDblFinder.class)
+seu_CITE4 <- as.Seurat(seu_CITE4, data = NULL)
+seu_CITE4 <- subset(seu_CITE4, subset= scDblFinder.class%in% c("singlet"))
+DefaultAssay(seu_CITE4) <- "RNA"
+dim(seu_CITE4)
+
+### Add labels for condition, sex, and genotype
+seu_CITE4$condition <- 'Blood'
+seu_CITE4$sex <- 'Male'
+seu_CITE4$genotype <- ifelse(seu_CITE4$MULTI_ID %in% c("Hashtag5","Hashtag6", "Hashtag7"), 'ElavlKO', 'ElavlWT')
+
+### Create new identifier with more descriptive info
+seu_CITE4$MULTI_ID2 <- paste0(seu_CITE4$MULTI_ID, "_Blood_Male")
+
+### Determine percentage of mitochondrial genes and subset data
+seu_CITE4[["percent.mt"]] <- PercentageFeatureSet(seu_CITE4, pattern = "^mt-")
+plot1 <- FeatureScatter(seu_CITE4,feature1="nCount_RNA",feature2="percent.mt")
+plot2 <- FeatureScatter(seu_CITE4,feature1="nCount_RNA",feature2="nFeature_RNA")
+plot1 + plot2
+seu_CITE4 <- subset(seu_CITE4, subset = nFeature_RNA > 300 & nFeature_RNA < 5000 & nCount_RNA < 20000 & percent.mt <10)
+dim(seu_CITE4)
+
+### Merge data
+seu <- merge(seu_CITE1, y = c(seu_CITE2, seu_CITE3 , seu_CITE4), add.cell.ids = c("seu_CITED1", "seu_CITED2", "seu_CITED3", "seu_CITED4"), project = "Elavl1")
+
+### Normalize and scale data
+seu <- NormalizeData(seu)
+seu <- ScaleData(seu)
+table(seu$MULTI_ID2)
+theme <- theme(panel.border = element_rect(colour = "black", fill=NA, linewidth = 0.5))
+
+### Normalize data using sctransform
+seu <- SCTransform(seu, assay = "RNA", new.assay.name = "SCT", do.correct.umi = T,
+vars.to.regress = c("nCount_RNA","percent.mt","MULTI_ID2"), seed.use = 123, verbose = T)
+
+### Run PCA
+seu <- RunPCA(seu, assay = "SCT", npcs = 50)
+ElbowPlot(seu)
+
+### Create and visualize UMAP
+seu <- RunUMAP(seu, dims=1:20, verbose=FALSE)
+seu <- FindNeighbors(seu, dims=1:20, verbose=FALSE)
+seu <- FindClusters(seu, resolution=0.5, verbose=FALSE)
+p1 <- DimPlot(seu, reduction = "umap", group.by = "seurat_clusters", label = T, label.size = 5, repel=T) +NoAxes() + NoLegend() + theme
+p2 <- DimPlot(seu, reduction = "umap", group.by = "condition", label = F) + NoAxes() + theme
+options(repr.plot.width=14, repr.plot.height=6)
+p1|p2
+
+### Use dotplot with marker genes to identify cluster cell types
+DotPlot(seu, features=c('Cd14','C1qa','Cd74','Itk','Il7r','Cd247','Cd4','Cd8a','Tox','Trdc','Klrd1','Ighm','Ighd','Ms4a1','Pecam1','Vwf','Cdh5','Dcn','Gsn','Pdgfra','Abcc9','Kcnj8','Myh11','Tagln','Acta2','S100a8','S100a9','Pf4','Plac8','Ccr2','Flt3','Klrb1b','Hba-a1','Hba-a2','Ms4a2','Fcer1a'),
+cluster.idents = T, col.min=-1.5,col.max=1.5) + RotatedAxis() + coord_flip() +
+scale_colour_gradient2(high = "#FFFF00",mid = "white", low = "#027b8e") +
+geom_point(aes(size=pct.exp), shape = 21, colour="black") &
+theme(axis.title=element_blank(), panel.border = element_rect(colour="black", fill=NA, size=0.5),
+legend.title = element_text(size = 12),legend.key.size = unit(0.5, "cm"),legend.key.width = unit(0.5,"cm"),
+legend.text=element_text(size=10), legend.position='right', axis.text.y=element_text(size=11),
+axis.text.x=element_text(size=12, angle=0, hjust=0.5))
+
+### Annotate cell types
+seu$Annotation <- ifelse(seu$seurat_clusters %in% c(5),'Macrophages', ifelse(
+seu$seurat_clusters %in% c(2,3,9,11),'T cells', ifelse(
+seu$seurat_clusters %in% c(10), 'Erythrocytes', ifelse(
+seu$seurat_clusters %in% c(13), 'Fibroblasts', ifelse(
+seu$seurat_clusters %in% c(0,7,12),'B cells', ifelse(
+seu$seurat_clusters %in% c(1),'Granulocytes', ifelse(
+seu$seurat_clusters %in% c(4,8),'Monocytes',ifelse(
+seu$seurat_clusters %in% c(6),'NK  Cells', ifelse(
+seu$seurat_clusters %in% c(14), 'Mast Cells', 'other')))))))))
+
+### Use Dimplot to visualize annotated clusters
+DimPlot(seu, reduction = "umap", group.by = "Annotation", label = F, repel=T, label.size = 6) + theme
+DimPlot(seu, reduction = "umap", group.by = "Annotation", label = F, repel=T, label.size = 6, split.by = 'genotype') + theme
+DimPlot(seu, reduction = "umap", group.by = "Annotation", label = F, repel=T, label.size = 6, split.by = 'condition') + theme
+
+### Normalize feature antibody capture counts
+DefaultAssay(seu) <- "NEAT"
+seu <- NormalizeData(seu, normalization.method = "CLR", margin = 2, assay = "NEAT")
+
+
+### Subset T cells and generate UMAP of T cell subclusters
+seu_lymph <- subset(seu, subset=Annotation %in% c("T cells"))
+seu_lymph <- SCTransform(seu_lymph, assay = "RNA", new.assay.name = "SCT", do.correct.umi = T,
+vars.to.regress = c("nCount_RNA","percent.mt","MULTI_ID2"), seed.use = 123, verbose = T)
+seu_lymph <- RunPCA(seu_lymph, assay = "SCT", npcs = 50)
+seu_lymph <- RunUMAP(seu_lymph, dims=1:20, verbose=FALSE)
+seu_lymph <- FindNeighbors(seu_lymph, dims=1:20, verbose=FALSE)
+seu_lymph <- FindClusters(seu_lymph, resolution=0.8, verbose=FALSE)
+DimPlot(seu_lymph, reduction = "umap", group.by = "seurat_clusters", label = T, label.size = 5, repel=T) +NoAxes() + NoLegend() & theme
+options(repr.plot.width=14, repr.plot.height=6)
+
+### Use dotplot of marker genes to identify T cell subsets
+DotPlot(seu_lymph, features = c('Cd4','Cd8a','Cd8b1','Ly6c2','Gzmb','Gzmk','Ifng','Ccl4','Tox','Sell','Trdc','Klrg1','Klrb1c','Foxp3','Nrp1','Izumo1r','Ctla4','Tnfrsf4'),
+cluster.idents = TRUE, col.min = -1.5, col.max = 1.5) + RotatedAxis() + coord_flip() +
+scale_colour_gradient2(high = "#FFFF00", mid = "white", low = "#027b8e") +
+geom_point(aes(size = pct.exp), shape = 21, colour = "black") +
+theme(axis.title = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 0.5),
+legend.title = element_text(size = 12), legend.key.size = unit(0.5, "cm"), legend.key.width = unit(0.5,"cm"),
+legend.text = element_text(size = 10), legend.position = 'right', axis.text.y = element_text(size = 11))
+
+### Use dotplot of antibody markers to further clarify T cell subsets
+DefaultAssay(seu_lymph) <- "NEAT"
+DotPlot(seu_lymph, features = c('CD4','CD8a','CD8b','Ox40','CD69','CD274','CD279','CD45','CD27','CD68','CD44','CD62L','Ly6C','CD73'),
+cluster.idents = TRUE, col.min = -1.5, col.max = 1.5) + RotatedAxis() + coord_flip() +
+scale_colour_gradient2(high = "#FFFF00", mid = "white", low = "#027b8e") +
+geom_point(aes(size = pct.exp), shape = 21, colour = "black") +
+theme(axis.title = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 0.5),
+legend.title = element_text(size = 12), legend.key.size = unit(0.5, "cm"), legend.key.width = unit(0.5,"cm"),
+legend.text = element_text(size = 10), legend.position = 'right', axis.text.y = element_text(size = 11))
+
+### Annotate T cell subclusters
+seu_lymph$Annotation <- ifelse(seu_lymph$seurat_clusters %in% c(0,2),'CD8 Tcm', ifelse(
+seu_lymph$seurat_clusters %in% c(8),'Gamma Delta T cells', ifelse(
+seu_lymph$seurat_clusters %in% c(5), 'CD8 Naive', ifelse(
+seu_lymph$seurat_clusters %in% c(3,4,9), 'CD8 Tem', ifelse(
+seu_lymph$seurat_clusters %in% c(6),'CD4 Naive', ifelse(
+seu_lymph$seurat_clusters %in% c(7),'CD8-NKT', ifelse(
+seu_lymph$seurat_clusters %in% c(10),'NKT', 'CD4 eTreg')))))))
+
+### Visualize annotated clusters
+DimPlot(seu_lymph, reduction = "umap", group.by = "Annotation", label = T, repel=T, label.size = 6) + theme
+DimPlot(seu_lymph, reduction = "umap", group.by = "Annotation", label = F, repel=T, label.size = 6) + theme
+DimPlot(seu_lymph, reduction = "umap", group.by = "seurat_clusters", label = F, repel=T, label.size = 6, split.by = 'genotype') + theme
+DimPlot(seu_lymph, reduction = "umap", group.by = "seurat_clusters", label = F, repel=T, label.size = 6, split.by = 'condition') + theme
+
+### Subset T cell subcluster 3 (plaque CD8 Tem cells)
+cluster_3 <- subset(seu_lymph, subset=seurat_clusters == '3')
+
+### Identify differences in gene expression between ElavlWT and ElavlKO conditions in T cell subcluster 3
+DefaultAssay(cluster_3) <- "RNA"
+Idents(cluster_3) <- "genotype"
+cluster_3.response <- FindMarkers(cluster_3, ident.1 = "ElavlWT", ident.2 = "ElavlKO", verbose = FALSE)
+
+### Make violin plots of differential genes
+VlnPlot(cluster_3, features = c("Cd3g", "Tcrg-C4", "Cd82", "Bcl2", "Trac","Tox"), group.by = 'genotype', ncol = 3)
+
+
+### Identify differences in normalized feature antibody counts between ElavlWT and ElavlKO conditions in T cell subcluster 3 
+DefaultAssay(cluster_3) <- "NEAT"
+cluster_3_NEAT.response <- FindMarkers(cluster_3, ident.1 = "ElavlWT", ident.2 = "ElavlKO", verbose = FALSE)
+
+### Make violin plots of differential antibodies
+VlnPlot(cluster_3, features = c("TCR","CD38","CD117"), group.by = 'genotype', ncol = 3)
